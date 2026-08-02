@@ -81,10 +81,10 @@ class GeminiService:
                 import asyncio
                 from groq import Groq
 
-                def _groq_call():
+                def _groq_call(model_name: str):
                     c = Groq(api_key=groq_key)
                     r = c.chat.completions.create(
-                        model="llama-3.3-70b-versatile",
+                        model=model_name,
                         messages=[{"role": "user", "content": prompt}],
                         temperature=0.3,
                         max_tokens=1024,
@@ -92,10 +92,16 @@ class GeminiService:
                     return r.choices[0].message.content.strip()
 
                 loop = asyncio.get_event_loop()
-                answer = await loop.run_in_executor(None, _groq_call)
-                if answer:
-                    logger.info("Groq responded OK, len=%d", len(answer))
-                    return answer
+                # llama-3.3-70b-versatile was deprecated by Groq on 2026-06-17.
+                # Try the current recommended models in order.
+                for model_name in ["openai/gpt-oss-120b", "openai/gpt-oss-20b", "qwen/qwen3.6-27b"]:
+                    try:
+                        answer = await loop.run_in_executor(None, _groq_call, model_name)
+                        if answer:
+                            logger.info("Groq model %s responded OK, len=%d", model_name, len(answer))
+                            return answer
+                    except Exception as me:
+                        logger.warning("Groq model %s failed: %s", model_name, repr(me))
             except Exception as e:
                 logger.error("Groq failed: %s", repr(e))
 
